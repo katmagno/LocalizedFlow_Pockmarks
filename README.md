@@ -17,3 +17,5 @@ Gen_FluxvsArea.m:
   - Estimates the average vertical flux [km/yr] from a pockmark of a given size
   - Links simulations to observational data by scaling simulated quantities by the size distribution of 476 pockmarks observed on the Chatham Rise, NZ
   - Finally, generates a range of the fluid volume transport rate [km^3]/yr from 476 Chatham Rise pockmarks. Assumes fluid is 30-70% CO2 and is in either liquid or gaseous phase
+
+DOI: https://zenodo.org/doi/10.5281/zenodo.13328488
