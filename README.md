@@ -1,9 +1,11 @@
 # LocalizedFlow_Pockmarks
+Model code developed in "Hydromechanical Simulations Reveal the Climatic-Relevance of CO2 Release from Pockmark on the Chatham Rise-Bounty Trough, New Zealand"
+Katrina C. Magno, J. Hillman, L. Räss, L. Stott, J. Suckale (in prep.)
 This collection of code includes a (1) 2D hydromechanical model (Julia) that simulates the formation of localized fluid pathways via nonlinear percolation of fluid through a viscous, deforming sediment matrix and (2) post-simulation code (MATLAB) that identifies pockmarks as localized fluid pathways that cross an idealized seafloor and outputs vertical flux [km/yr] vs area [km^2] plots and estimates a range of fluid volume transport rates by scaling according to observational pockmark size data from the Chatham Rise, New Zealand.
 
 # 2D Hydromechanical Model (Julia):
 HydroMech2D_Main.jl:
-  - Main code to run HM model and save out vertical flux (qDy), time, and reference porosity (ϕ0) 
+  - Main code to run HM model and save out vertical flux (qDy), time, and reference porosity (ϕ0). Can also adjust HM Model GPU capability via "const USE_GPU". Setting to "true" enables HydroMech2D_Main.jl to be run on GPUs. Model was submitted via sbatch to the Stanford Sherlock HPC Cluster.
 HydroMechDataTypes.jl:
   - Specify poromechanical parameters and initial conditions
 HydroMechFunctions.jl:
