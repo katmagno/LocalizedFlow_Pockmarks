@@ -1,7 +1,9 @@
 close all;
 clear all;
-paths = [{'/Users/kmagno/Documents/porosity_update/np21/'},{'/Users/kmagno/Documents/porosity_update/np24/'},{'/Users/kmagno/Documents/porosity_update/np27/'},{'/Users/kmagno/Documents/porosity_update/np30/'},...
-    {'/Users/kmagno/Documents/porosity_update/np33/'}];
+% paths = [{'/Users/kmagno/Documents/porosity_update/np21/'},{'/Users/kmagno/Documents/porosity_update/np24/'},{'/Users/kmagno/Documents/porosity_update/np27/'},{'/Users/kmagno/Documents/porosity_update/np30/'},...
+%     {'/Users/kmagno/Documents/porosity_update/np33/'}];
+paths = [DATA PATHS];
+
 % Physical Parameters
 perm = 5e-15; % m^2
 mu_f = 5e-5; % viscosity of fluid, Pas
@@ -14,10 +16,9 @@ flux_scale = (delta_c/tau_years); % Characteristic flux
 
 % Allocate space
 vol_flux = zeros([13,5]);
-error_volflux = zeros([13,5]);
 % Loop through permeability power-law exponents
 for jj = 1:length(paths)
-    clearvars -except delta_c tau_years flux_scale paths jj kk perm data_count vol_flux error_volflux delta_ny
+    clearvars -except  delta_c tau_years flux_scale paths jj vol_flux error_volflux delta_ny cr_flux cr_area
     % Set model resolution
     res = 256;
     ny = res*2-1;
@@ -45,11 +46,13 @@ for jj = 1:length(paths)
     A = dir(strcat(import_path,'qDys*.csv'));
     names = {A(:).name};
     B=natsort(names);
+        adj_t = times_t(end)/length(B):times_t(end)/length(B):times_t(end);
     P = dir(strcat(import_path,'Phi*.csv'));
     names_phi = {P(:).name};
     Phi_fnm=natsort(names_phi);
 
     count = 0;
+    % Extract and store data along seafloor over time
     for ii = 1:length(B)
         T = readmatrix(strcat(import_path,string(B{ii})));
         T = rot90(T);
@@ -63,7 +66,7 @@ for jj = 1:length(paths)
         slices(ii,:) = T(horz_slice,:);
         phi_slices(ii,:) = Phi(horz_slice,:);
     end
-    % Threshold flux data to ignore fluxes lower than 2.
+    % Threshold flux data to ignore fluxes lower than 2
     slices(slices < 2)=0;
     % Find where the pockmarks form
     K = find(sum(slices,2) ~=0);
@@ -71,9 +74,12 @@ for jj = 1:length(paths)
     start_oi = K(1);
     rows_oi = slices(start_oi:end,:);
     figure(12); imagesc(rows_oi);
-    times_oi = times_t(start_oi:end);
+    
+    times_oi = adj_t(start_oi:end);
     phi_oi = phi_slices(start_oi:end,:);
     time_period = times_oi.*tau_years;
+    tot_real_time = time_period(end); % Total simulation time in years
+
     locs_list = [];
     full_pic = zeros(2,2);
     full_rad = zeros(2,2);
@@ -81,16 +87,20 @@ for jj = 1:length(paths)
     mean_phi = zeros(2,2);
     area_std = zeros(2,2);
     count_loc = 0;
-    % find pockmarks in flux data along seafloor
-    for rr =1:size(rows_oi,1)
+    time_0 = 0;
+
+    % Process to identify pockmarks, estimate area, vertical flux, and
+    % volume transport
+    for rr = 1:size(rows_oi,1)
+        dt = times_oi(rr)-time_0;
         single_row = rows_oi(rr,:);
         single_phi = (phi_oi(rr,:));
         [pks,locs,w,proms] = findpeaks(single_row,'WidthReference','halfheight');
         for nn = 1:length(locs)
             %Determine area of each peak for each loc
-            if proms(nn) > 0.5
-                start_pt = floor(locs(nn)-(w(nn)));
-                end_pt = floor(locs(nn)+(w(nn)));
+            if proms(nn) > 1.5
+                start_pt = floor(locs(nn)-(w(nn)/2));
+                end_pt = floor(locs(nn)+(w(nn)/2));
                 if start_pt <= 0
                     start_pt = 1;
                 end
@@ -98,48 +108,67 @@ for jj = 1:length(paths)
                     end_pt = nx;
                 end
                 int_row = single_row(start_pt:end_pt);
-                int_flux = sum(int_row);
-                mean_phi = mean(single_phi);
-                pk_radius = w(nn);
-                if pk_radius == 0
+                int_phi = single_phi(start_pt:end_pt);
+                if length(find(int_row ~=0)) < 3
                     continue
                 else
-                    if ~any(locs(nn) == locs_list)
-                        if (any(locs(nn) == locs(1:nn-1)+1) || any(locs(nn) == locs(1:nn-1)-1))
-                            continue
-                        else
-                            count_loc = count_loc + 1;
-                            locs_list(count_loc) = locs(nn);
-                            full_pic(1,count_loc) = int_flux;
-                            flux_std(1,count_loc) = std(int_row);
-                            full_rad(1,count_loc) = pk_radius;
-                            area_std(1,count_loc) = 1/2;
-                            full_phi(1,count_loc) = mean_phi;
+                  
+                    int_flux = mean(int_row);
+                    mean_phi = mean(single_phi);
+                    pk_radius = w(nn)/2;
+                    v = (1:length(int_row))*delta_c; % m
+                    vnd = (1:length(int_row)); 
+                    gauss_func = fit(v.',(int_row*flux_scale).','gauss1');
+                    gauss_func_nd = fit(vnd.',(int_row).','gauss1');
+                    [gauss_vol] = calc_vol(v, gauss_func)*dt*tau_years;
+                    FWHM = 2 * sqrt(2*log(2)) * gauss_func.c1;
+                    if pk_radius == 0
+                        continue
+                    else
+                        if ~any(locs(nn) == locs_list)
+                            if (any(locs(nn) == locs(1:nn-1)+1) || any(locs(nn) == locs(1:nn-1)-1))
+                                continue
+                            else
+                                count_loc = count_loc + 1;
+                                locs_list(count_loc) = locs(nn);
+                                full_vol(1,count_loc) = gauss_vol;
+                                full_pic(1,count_loc) = int_flux;
+                                flux_std(1,count_loc) = std(int_row);
+                                full_rad(1,count_loc) = pk_radius;
+                                area_std(1,count_loc) = 1/2;
+                                full_phi(1,count_loc) = mean_phi;
+                            end
+                        elseif any(locs(nn) == locs_list)
+                            count_loc_copy = find(locs(nn)==locs_list);
+                            add_row = size(full_pic(:,count_loc_copy),1);
+                            full_pic(add_row+1,count_loc_copy) = int_flux;
+                            full_vol(add_row+1,count_loc_copy) = gauss_vol;
+                            flux_std(add_row+1,count_loc_copy) = std(int_row);
+                            full_rad(add_row+1,count_loc_copy) = pk_radius;
+                            area_std(add_row+1,count_loc_copy) = 1/2;
+                            full_phi(add_row+1,count_loc_copy)= mean_phi;
                         end
-                    elseif any(locs(nn) == locs_list)
-                        count_loc_copy = find(locs(nn)==locs_list);
-                        add_row = size(full_pic(:,count_loc_copy),1);
-                        full_pic(add_row+1,count_loc_copy) = int_flux;
-                        flux_std(add_row+1,count_loc_copy) = std(int_row);
-                        full_rad(add_row+1,count_loc_copy) = pk_radius;
-                        area_std(add_row+1,count_loc_copy) = 1/2;
-                        full_phi(add_row+1,count_loc_copy)= mean_phi;
                     end
                 end
             else
                 continue
             end
         end
+        time_0 = times_oi(rr);
     end
     % Convert to radius to area for pockmarks, assume circle
-    km_area = (pi*(full_rad*(lx/nx)*delta_c).^2)*1e-6; %km^2
     count_std = 0;
-    for gg = 1:size(full_pic,2)
-        nz_avg_flux(gg) = mean(nonzeros(full_pic(:,gg)));
-        nz_avg_radius(gg) = mean(nonzeros(full_rad(:,gg)));
-        nz_var_rad(gg) = 0.5./sqrt(length(nonzeros(area_std(:,gg))));
-        nz_var_flux(gg) = sqrt(sum((nonzeros(flux_std(:,gg))).^2)/length(nonzeros(flux_std(:,gg))));
-        nz_phi(gg) = mean(nonzeros(full_phi(:,gg)));
+    for gg = 1:size(full_vol,2)
+        if nnz(nonzeros(full_vol(:,gg))) == 0
+            continue
+        else
+            nz_avg_flux(gg) = mean(nonzeros(full_pic(:,gg)));
+            nz_tot_vol(gg) = sum(nonzeros(full_vol(:,gg))); % totl vol per pockmark
+            nz_avg_radius(gg) = mean(nonzeros(full_rad(:,gg)));
+            nz_var_rad(gg) = 0.5./sqrt(length(nonzeros(area_std(:,gg))));
+            nz_var_flux(gg) = sqrt(sum((nonzeros(flux_std(:,gg))).^2)/length(nonzeros(flux_std(:,gg))));
+            nz_phi(gg) = mean(nonzeros(full_phi(:,gg)));
+        end
     end
 
     SEM_rad= nz_var_rad;
@@ -147,10 +176,12 @@ for jj = 1:length(paths)
     fin_flux= nz_avg_flux;
     fin_rad = nz_avg_radius;
     fin_phi = nz_phi;
-
+    
 
     fin_flux_kmpyr = fin_flux*flux_scale*1e-3; %km/yr
     fin_Sigmaflux = SEM_flux*flux_scale*1e-3; %km/yr
+    fin_vol = nz_tot_vol*1e-9; % km^3
+
 
     fin_SigmaArea = (pi*(SEM_rad*(lx/nx)*delta_c).^2)*1e-6;
     fin_area_km2 = (pi*(fin_rad*(lx/nx)*delta_c).^2)*1e-6; %km^2
@@ -171,7 +202,6 @@ for jj = 1:length(paths)
     xlabel('$\textbf{Pockmark Area \boldmath{[km$^{2}$]}}$','interpreter','latex','Fontsize',FS);
     ylabel('$\textbf{Fluid Release Rate \boldmath{[km/yr]}}$','interpreter','latex','Fontsize',FS,'FontWeight','bold');
     hold on; 
-
     % Sort sizes of simulated pockmarks according to observed pockmark
     % sizes on the Chatham Rise
      p_flux = 0;
@@ -179,6 +209,7 @@ for jj = 1:length(paths)
      p_area = 0;
      p_area_var = 0;
      p_phi=0;
+     p_vol_rate = 0;
 
     for ff = 1:size(fin_area_km2,2)
         area_oi = fin_area_km2(ff);
@@ -193,6 +224,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 0.15 < round(area_oi,2) && round(area_oi,2) <= 0.25
             aa = 2;
@@ -201,6 +233,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 0.25 < round(area_oi,2) && round(area_oi,2)<= 0.35
             aa = 3;
@@ -209,6 +242,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 0.35 < round(area_oi,2) && round(area_oi,2) <= 0.45
             aa = 4;
@@ -217,6 +251,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 0.45 < round(area_oi,2) && round(area_oi,2) <= 0.55
             aa = 5;
@@ -225,6 +260,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 0.55 < round(area_oi,2) && round(area_oi,2) <= 0.65
             aa = 6;
@@ -233,6 +269,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 0.65 < round(area_oi,2) && round(area_oi,2) <= 0.75
             aa = 7;
@@ -241,6 +278,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 0.75 < round(area_oi,2) && round(area_oi,2) <= 0.85
             aa = 8;
@@ -249,6 +287,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 0.85 < round(area_oi,2) && round(area_oi,2) <= 0.95
             aa = 9;
@@ -257,6 +296,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 1.05 < round(area_oi,2) && round(area_oi,2) <= 1.15
             aa = 10;
@@ -265,6 +305,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 1.15 < round(area_oi,2) && round(area_oi,2) <=  1.25
             aa = 11;
@@ -273,6 +314,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 1.25 < round(area_oi,2) && round(area_oi,2) <= 1.35
             aa = 12;
@@ -281,6 +323,7 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         elseif 1.35 < round(area_oi,2) && round(area_oi,2) <= 1.45
             aa = 13;
@@ -289,18 +332,18 @@ for jj = 1:length(paths)
             p_phi(aa,end+1) = fin_phi(ff);
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
+            p_vol_rate(aa,end+1) = fin_vol(ff);
 
         end
     end
     % Determine fluid volume transfer rates scaled by porosity
-    G =p_flux.*p_area.*p_phi;
-    for gg = 1:size(G,1) %size class x pockmark #
-        if nnz(nonzeros(G(gg,:))) == 0
+    for gg = 1:size(p_vol_rate,1) %size class x pockmark #
+        if nnz(nonzeros(p_vol_rate(gg,:))) == 0
             vol_flux(gg,jj) = 0;
-            error_volflux(gg,jj) = 0;
         else
-        vol_flux(gg,jj) = mean(nonzeros(G(gg,:))); %average over pockmark numbers for each size class
-        error_volflux(gg,jj) = meanxy_sig_calc((xy_sig_calc(p_flux_var(gg,:),p_flux(gg,:),p_area_var(gg,:),p_area(gg,:),G(gg,:))));
+        vol_flux(gg,jj) = mean(nonzeros(p_vol_rate(gg,:)));
+        cr_flux(gg,jj) = mean(nonzeros(p_flux(gg,:)));%average over pockmark numbers for each size class
+        cr_area(gg,jj) = mean(nonzeros(p_area(gg,:)));
         end
     end
 
@@ -308,33 +351,17 @@ end
 
 %% Scale fluid volume transfer rates by pockmark size distributions on CR
 obs_pockmark_n = [40; 114; 136; 89; 52; 23; 11; 1; 4; 2; 1; 1; 2];
-cr_flux = vol_flux.*obs_pockmark_n;
-cr_fluxsig = error_volflux.*obs_pockmark_n;
-final_cr_flux = mean(sum(cr_flux,1))
-final_cr_sig = meanxy_sig_calc(sqrt(sum((cr_fluxsig.^2),1)))
+cr_vol_rate = vol_flux.*obs_pockmark_n;
+final_vol_flux = mean(sum(cr_vol_rate,1))/tot_real_time %km3/yr
 % Convert to mass in PgCO2
-% liquid CO2
-rho_l = 1.1e12;
+% liquid CO2 kg/km^3
+rho_l = 1.1e12; 
 % gas CO2
-rho_g = 1.87e9;
+rho_g = 1.87e+9;
 
-kg2Pg = 1e12; % Convert kg to Pg
-mass_rate_liq(1) = final_cr_flux*0.3*rho_l/kg2Pg;
-mass_rate_liq(2) = final_cr_flux*0.7*rho_l/kg2Pg;
-sig_rates_liq(1) = final_cr_sig*0.3*rho_l/kg2Pg;
-sig_rates_liq(2) = final_cr_sig*0.7*rho_l/kg2Pg;
+kg2Pg = 1e-12; % Convert kg to Pg
 
-mass_rate_gas(1) = final_cr_flux*0.3*rho_g/kg2Pg;
-mass_rate_gas(2) = final_cr_flux*0.7*rho_g/kg2Pg;
-sig_rates_gas(1) = final_cr_sig*0.3*rho_g/kg2Pg;
-sig_rates_gas(2) = final_cr_sig*0.7*rho_g/kg2Pg;
-disp('Gas Phase Estimates: ')
-format short
-disp(['30%= ' num2str(round(mass_rate_gas(1),3,"significant")) ' +/- ' num2str(round(sig_rates_gas(1),2,"significant"))])
-disp(['70%= ' num2str(round(mass_rate_gas(2),3,"significant")) ' +/- ' num2str(round(sig_rates_gas(2),2,"significant"))])
-
-disp('Liquid Phase Estimates: ')
-disp(['30%= ' num2str(round(mass_rate_liq(1),3,"significant")) ' +/- ' num2str(round(sig_rates_liq(1),2,"significant"))])
-disp(['70%= ' num2str(round(mass_rate_liq(2),3,"significant")) ' +/- ' num2str(round(sig_rates_liq(2),2,"significant"))])
+mass_flux_liq = final_vol_flux*rho_l*kg2Pg
+mass_flux_gas = final_vol_flux*rho_g*kg2Pg
 
 disp('DONE')
