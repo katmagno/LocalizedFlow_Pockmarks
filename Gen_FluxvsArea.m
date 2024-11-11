@@ -16,9 +16,12 @@ flux_scale = (delta_c/tau_years); % Characteristic flux
 
 % Allocate space
 vol_flux = zeros([13,5]);
+error_volflux = zeros([13,5]);
 % Loop through permeability power-law exponents
 for jj = 1:length(paths)
-    clearvars -except  delta_c tau_years flux_scale paths jj vol_flux error_volflux delta_ny cr_flux cr_area
+    disp('Path =')
+    disp(jj)
+    clearvars -except mean_test delta_c tau_years flux_scale paths jj kk perm data_count vol_flux error_volflux delta_ny cr_flux cr_area
     % Set model resolution
     res = 256;
     ny = res*2-1;
@@ -28,6 +31,16 @@ for jj = 1:length(paths)
     dy = ly/(ny) ;
     % Convert 200m to model resolution units
     delta_ny = (200/delta_c)*(ny/ly);
+
+    syms A x y x0 y0 sigmaX sigmaY a b c d
+    f(A,x,y,x0,y0,sigmaX,sigmaY, a, b, c, d) = A * exp(-((x-x0).^2./(2*sigmaX^2)+(y-y0).^2./(2*sigmaY^2)));
+    I1 = int(f,x, a, b);
+    I2 = int(I1,y, c, d); % Indefinite 2D integral
+    fA(A,x0,y0,sigmaX,sigmaY) = diff(I2,A);
+    fx0(A,x0,y0,sigmaX,sigmaY) = diff(I2,x0);
+    fy0(A,x0,y0,sigmaX,sigmaY) = diff(I2,y0);
+    fsigmaX(A,x0,y0,sigmaX,sigmaY) = diff(I2,sigmaX);
+    fsigmaY(A,x0,y0,sigmaX,sigmaY) = diff(I2,sigmaY);
 
     % Set plot colors and font size
     colors_256_3 = [191 211 230; 158 188 218; 140 150 198; 136 86 167; 129 15 124];
@@ -46,13 +59,12 @@ for jj = 1:length(paths)
     A = dir(strcat(import_path,'qDys*.csv'));
     names = {A(:).name};
     B=natsort(names);
-        adj_t = times_t(end)/length(B):times_t(end)/length(B):times_t(end);
+    adj_t = times_t(end)/length(B):times_t(end)/length(B):times_t(end);
     P = dir(strcat(import_path,'Phi*.csv'));
     names_phi = {P(:).name};
     Phi_fnm=natsort(names_phi);
 
     count = 0;
-    % Extract and store data along seafloor over time
     for ii = 1:length(B)
         T = readmatrix(strcat(import_path,string(B{ii})));
         T = rot90(T);
@@ -66,7 +78,7 @@ for jj = 1:length(paths)
         slices(ii,:) = T(horz_slice,:);
         phi_slices(ii,:) = Phi(horz_slice,:);
     end
-    % Threshold flux data to ignore fluxes lower than 2
+    % Threshold flux data to ignore fluxes lower than 2.
     slices(slices < 2)=0;
     % Find where the pockmarks form
     K = find(sum(slices,2) ~=0);
@@ -78,7 +90,7 @@ for jj = 1:length(paths)
     times_oi = adj_t(start_oi:end);
     phi_oi = phi_slices(start_oi:end,:);
     time_period = times_oi.*tau_years;
-    tot_real_time = time_period(end); % Total simulation time in years
+    tot_real_time = time_period(end);
 
     locs_list = [];
     full_pic = zeros(2,2);
@@ -86,12 +98,15 @@ for jj = 1:length(paths)
     flux_std = zeros(2,2);
     mean_phi = zeros(2,2);
     area_std = zeros(2,2);
+    full_vol = zeros(2,2);
+    vol_err = zeros(2,2);
+    full_phi = zeros(2,2);
     count_loc = 0;
+    % find pockmarks in flux data along seafloor
     time_0 = 0;
-
-    % Process to identify pockmarks, estimate area, vertical flux, and
-    % volume transport
     for rr = 1:size(rows_oi,1)
+        disp('rr = ')
+        disp(round(rr/size(rows_oi,1),3))
         dt = times_oi(rr)-time_0;
         single_row = rows_oi(rr,:);
         single_phi = (phi_oi(rr,:));
@@ -119,8 +134,10 @@ for jj = 1:length(paths)
                     v = (1:length(int_row))*delta_c; % m
                     vnd = (1:length(int_row)); 
                     gauss_func = fit(v.',(int_row*flux_scale).','gauss1');
-                    gauss_func_nd = fit(vnd.',(int_row).','gauss1');
-                    [gauss_vol] = calc_vol(v, gauss_func)*dt*tau_years;
+                    ci = confint(gauss_func,0.95);
+                    [vol, dI] = calc_vol(v, gauss_func, ci, fA, fx0, fy0, fsigmaX, fsigmaY);
+                    gauss_vol = vol*dt*tau_years;
+                    err_vol = dI*dt*tau_years;
                     FWHM = 2 * sqrt(2*log(2)) * gauss_func.c1;
                     if pk_radius == 0
                         continue
@@ -132,6 +149,7 @@ for jj = 1:length(paths)
                                 count_loc = count_loc + 1;
                                 locs_list(count_loc) = locs(nn);
                                 full_vol(1,count_loc) = gauss_vol;
+                                vol_err(1,count_loc) = err_vol;
                                 full_pic(1,count_loc) = int_flux;
                                 flux_std(1,count_loc) = std(int_row);
                                 full_rad(1,count_loc) = pk_radius;
@@ -143,6 +161,7 @@ for jj = 1:length(paths)
                             add_row = size(full_pic(:,count_loc_copy),1);
                             full_pic(add_row+1,count_loc_copy) = int_flux;
                             full_vol(add_row+1,count_loc_copy) = gauss_vol;
+                            vol_err(add_row+1,count_loc_copy) = err_vol;
                             flux_std(add_row+1,count_loc_copy) = std(int_row);
                             full_rad(add_row+1,count_loc_copy) = pk_radius;
                             area_std(add_row+1,count_loc_copy) = 1/2;
@@ -164,6 +183,7 @@ for jj = 1:length(paths)
         else
             nz_avg_flux(gg) = mean(nonzeros(full_pic(:,gg)));
             nz_tot_vol(gg) = sum(nonzeros(full_vol(:,gg))); % totl vol per pockmark
+            nz_var_vol(gg) = sum(nonzeros(vol_err(:,gg)));
             nz_avg_radius(gg) = mean(nonzeros(full_rad(:,gg)));
             nz_var_rad(gg) = 0.5./sqrt(length(nonzeros(area_std(:,gg))));
             nz_var_flux(gg) = sqrt(sum((nonzeros(flux_std(:,gg))).^2)/length(nonzeros(flux_std(:,gg))));
@@ -176,11 +196,11 @@ for jj = 1:length(paths)
     fin_flux= nz_avg_flux;
     fin_rad = nz_avg_radius;
     fin_phi = nz_phi;
-    
 
     fin_flux_kmpyr = fin_flux*flux_scale*1e-3; %km/yr
     fin_Sigmaflux = SEM_flux*flux_scale*1e-3; %km/yr
     fin_vol = nz_tot_vol*1e-9; % km^3
+    fin_vol_err = nz_var_vol*1e-9;
 
 
     fin_SigmaArea = (pi*(SEM_rad*(lx/nx)*delta_c).^2)*1e-6;
@@ -210,6 +230,7 @@ for jj = 1:length(paths)
      p_area_var = 0;
      p_phi=0;
      p_vol_rate = 0;
+     p_vol_err = 0;
 
     for ff = 1:size(fin_area_km2,2)
         area_oi = fin_area_km2(ff);
@@ -225,6 +246,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 0.15 < round(area_oi,2) && round(area_oi,2) <= 0.25
             aa = 2;
@@ -234,6 +256,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 0.25 < round(area_oi,2) && round(area_oi,2)<= 0.35
             aa = 3;
@@ -243,6 +266,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 0.35 < round(area_oi,2) && round(area_oi,2) <= 0.45
             aa = 4;
@@ -252,6 +276,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 0.45 < round(area_oi,2) && round(area_oi,2) <= 0.55
             aa = 5;
@@ -261,6 +286,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 0.55 < round(area_oi,2) && round(area_oi,2) <= 0.65
             aa = 6;
@@ -270,6 +296,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 0.65 < round(area_oi,2) && round(area_oi,2) <= 0.75
             aa = 7;
@@ -279,6 +306,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 0.75 < round(area_oi,2) && round(area_oi,2) <= 0.85
             aa = 8;
@@ -288,6 +316,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 0.85 < round(area_oi,2) && round(area_oi,2) <= 0.95
             aa = 9;
@@ -297,6 +326,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 1.05 < round(area_oi,2) && round(area_oi,2) <= 1.15
             aa = 10;
@@ -306,6 +336,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 1.15 < round(area_oi,2) && round(area_oi,2) <=  1.25
             aa = 11;
@@ -315,6 +346,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 1.25 < round(area_oi,2) && round(area_oi,2) <= 1.35
             aa = 12;
@@ -324,6 +356,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         elseif 1.35 < round(area_oi,2) && round(area_oi,2) <= 1.45
             aa = 13;
@@ -333,6 +366,7 @@ for jj = 1:length(paths)
             p_area(aa,end+1)  = fin_area_km2(ff);
             p_area_var(aa,end+1) = fin_SigmaArea(ff);
             p_vol_rate(aa,end+1) = fin_vol(ff);
+            p_vol_err(aa,end+1) = fin_vol_err(ff);
 
         end
     end
@@ -342,6 +376,7 @@ for jj = 1:length(paths)
             vol_flux(gg,jj) = 0;
         else
         vol_flux(gg,jj) = mean(nonzeros(p_vol_rate(gg,:)));
+        error_volflux(gg,jj) = sqrt(sum(p_vol_err(gg,:).^2)) / sqrt(length(p_vol_err(gg,:)));
         cr_flux(gg,jj) = mean(nonzeros(p_flux(gg,:)));%average over pockmark numbers for each size class
         cr_area(gg,jj) = mean(nonzeros(p_area(gg,:)));
         end
@@ -352,7 +387,11 @@ end
 %% Scale fluid volume transfer rates by pockmark size distributions on CR
 obs_pockmark_n = [40; 114; 136; 89; 52; 23; 11; 1; 4; 2; 1; 1; 2];
 cr_vol_rate = vol_flux.*obs_pockmark_n;
+cr_vol_err = error_volflux .*obs_pockmark_n;
 final_vol_flux = mean(sum(cr_vol_rate,1))/tot_real_time %km3/yr
+sig_sum = sqrt(sum(cr_vol_err.^2,1));
+sig_mean = sqrt(sum(sig_sum.^2))/length(sig_sum);
+final_vol_sig = sig_mean/tot_real_time
 % Convert to mass in PgCO2
 % liquid CO2 kg/km^3
 rho_l = 1.1e12; 
@@ -361,7 +400,13 @@ rho_g = 1.87e+9;
 
 kg2Pg = 1e-12; % Convert kg to Pg
 
-mass_flux_liq = final_vol_flux*rho_l*kg2Pg
-mass_flux_gas = final_vol_flux*rho_g*kg2Pg
+mass_flux_liq = final_vol_flux*rho_l*kg2Pg;
+mass_flux_gas = final_vol_flux*rho_g*kg2Pg;
+
+disp('Mass Flux for Liquid:')
+disp(mass_flux_liq)
+
+disp('Mass Flux for Gas:')
+disp(mass_flux_gas)
 
 disp('DONE')
