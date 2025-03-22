@@ -2,7 +2,7 @@
 Model code developed in "Hydromechanical Simulations Reveal the Climatic-Relevance of CO2 Release from Pockmark on the Chatham Rise-Bounty Trough, New Zealand"
 Katrina C. Magno, J. I. T. Hillman, L. Räss, L. Stott, J. Suckale (in prep. 2025)
 This collection of code includes a (1) 2D hydromechanical model (Julia) that simulates the formation of localized fluid pathways via nonlinear percolation of fluid through a viscous, deforming sediment matrix and (2) simulation data analyses code (MATLAB) that identifies pockmarks as localized fluid pathways that cross an idealized seafloor and outputs vertical flux [km/yr] vs area [km^2] plots and estimates a range of fluid volume transport rates by scaling according to observational pockmark size data from Chatham Rise, New Zealand.
-
+## Figure 3 d-e from Magno et al., 2025 located in this repository under "ratevsarea_k5eneg16.fig" and "ratevsarea_k5eneg15.fig"
 ## 2D Hydromechanical Model (Julia):
 ### HydroMech2D_Main.jl:
 Main code to run HM model
