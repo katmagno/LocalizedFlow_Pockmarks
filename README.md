@@ -1,24 +1,24 @@
-### LocalizedFlow_Pockmarks
+# LocalizedFlow_Pockmarks
 Model code developed in "Hydromechanical Simulations Reveal the Climatic-Relevance of CO2 Release from Pockmark on the Chatham Rise-Bounty Trough, New Zealand"
 Katrina C. Magno, J. I. T. Hillman, L. Räss, L. Stott, J. Suckale (in prep. 2025)
 This collection of code includes a (1) 2D hydromechanical model (Julia) that simulates the formation of localized fluid pathways via nonlinear percolation of fluid through a viscous, deforming sediment matrix and (2) simulation data analyses code (MATLAB) that identifies pockmarks as localized fluid pathways that cross an idealized seafloor and outputs vertical flux [km/yr] vs area [km^2] plots and estimates a range of fluid volume transport rates by scaling according to observational pockmark size data from Chatham Rise, New Zealand.
 
 ## 2D Hydromechanical Model (Julia):
-# HydroMech2D_Main.jl:
+### HydroMech2D_Main.jl:
 Main code to run HM model
   - Saves out vertical flux (qDy), time, and porosity (ϕ)
   - Adjust HM Model GPU capability via "const USE_GPU". Setting to "true" enables HydroMech2D_Main.jl to be run on GPUs. Model was submitted using sbatch to the Stanford Sherlock HPC       Cluster
 
-# HydroMechDataTypes.jl:
+### HydroMechDataTypes.jl:
   - Specify poromechanical parameters and initial conditions
   - For distributed flow: R = 1.0 and n_k = 1.0 (Figure 2a-d in Magno et al., 2025)
   - For localized flow: R > 1.0 and n_k > 1.0 (Figure 2e-h in Magno et al., 2025)
 
-# HydroMechFunctions.jl:
+### HydroMechFunctions.jl:
   - Functions required to solve coupled Darcy + Stokes flow equations
 
 ## Simulation Data Analyses (MATLAB):
-# Gen_FluxvsArea.m:
+### Gen_FluxvsArea.m:
 Inputs: vertical flux data, time, and porosity CSV files from HM simulation. (Optional: Simulation data included in ... to reproduce Figure 3 d-e)
 Outputs: Plots of Average Vertical Flux/pockmark [km/yr] vs pockmark area [km^2] and range of the fluid volume transport rates [km^3]/yr from 476 Chatham Rise pockmarks. Assumes        fluid is 100% CO2 and is in either liquid or gaseous phase
 Initial Flow:
@@ -46,4 +46,4 @@ Estimate fluid volume transport rates for 476 Pockmarks on Chatham Rise, New Zea
     simultaneous eruption of fluid from the 476 pockmarks
   - Assume fluid is 100% CO2 and is in either liquid or gaseous phase to get mass transport rate estimates of CO2 [PgCO2/yr]
 
-DOI: https://zenodo.org/doi/10.5281/zenodo.13328488
+### DOI: https://zenodo.org/doi/10.5281/zenodo.13328488
