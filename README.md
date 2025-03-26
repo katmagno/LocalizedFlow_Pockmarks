@@ -56,5 +56,3 @@ Inputs: Simulation data (vertical flux data qDy)
 Outputs: Heatmaps of vertical flux data
 Required using "crameri.m" to use the "batlowW" colorscheme.
 Crameri, Fabio. (2021). Scientific colour maps (7.0.1). Zenodo. https://doi.org/10.5281/zenodo.5501399
-
-### DOI: https://zenodo.org/doi/10.5281/zenodo.13328488
