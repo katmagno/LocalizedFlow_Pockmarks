@@ -19,6 +19,8 @@ Main code to run HM model
 ### HydroMechFunctions.jl:
   - Functions required to solve coupled Darcy + Stokes flow equations
 
+## Simulation data used to create Figure 2 (b-d), (f-h) and Figure 3 d-e is available on Zenodo at https://doi.org/10.5281/zenodo.15090516
+
 ## Simulation Data Analyses (MATLAB):
 ### Gen_FluxvsArea.m:
 Inputs: vertical flux data, time, and porosity CSV files from HM simulation. (Optional: Simulation data included in ... to reproduce Figure 3 d-e)
