@@ -19,7 +19,7 @@ Main code to run HM model
 ### HydroMechFunctions.jl:
   - Functions required to solve coupled Darcy + Stokes flow equations
 
-## Simulation data used to create Figure 2 (b-d), (f-h) and Figure 3 d-e is available on Zenodo at https://doi.org/10.5281/zenodo.15090516
+## Simulation data used to create Figure 2 (b-d), (f-h) and Figure 3 d-e is available on Zenodo at https://doi.org/10.5281/zenodo.15090516. This includes vertical flux and phi CSV files for R = [1,50], C = 10, n_k = [1.0,2.1,2.4,2.7,3.0,3.3], horizontal model resolution = [64,128,256,512], and simulation time = [0.25,20.0].
 
 ## Simulation Data Analyses (MATLAB):
 ### Gen_FluxvsArea.m:
