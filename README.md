@@ -1,8 +1,10 @@
 # LocalizedFlow_Pockmarks
-Model code developed in "Hydromechanical Simulations Reveal the Climatic-Relevance of CO2 Release from Pockmark on the Chatham Rise-Bounty Trough, New Zealand"
-Katrina C. Magno, J. I. T. Hillman, L. Räss, L. Stott, J. Suckale (in prep. 2025)
-This collection of code includes a (1) 2D hydromechanical model (Julia) that simulates the formation of localized fluid pathways via nonlinear percolation of fluid through a viscous, deforming sediment matrix and (2) simulation data analyses code (MATLAB) that identifies pockmarks as localized fluid pathways that cross an idealized seafloor and outputs vertical flux [km/yr] vs area [km^2] plots and estimates a range of fluid volume transport rates by scaling according to observational pockmark size data from Chatham Rise, New Zealand.
+## Model code developed in "Hydromechanical Simulations Reveal the Climatic-Relevance of CO2 Release from Pockmark on the Chatham Rise-Bounty Trough, New Zealand"
+## K. C. Magno, J. I. T. Hillman, L. Räss, L. Stott, J. Suckale (in prep. 2025)
+### This collection of code includes a (1) 2D hydromechanical model (Julia) that simulates the formation of localized fluid pathways via nonlinear percolation of fluid through a viscous, deforming sediment matrix and (2) simulation data analyses code (MATLAB) that identifies pockmarks as localized fluid pathways that cross an idealized seafloor and outputs vertical flux [km/yr] vs area [km^2] plots and estimates a range of fluid volume transport rates by scaling according to observational pockmark size data from Chatham Rise, New Zealand.
+
 ## Figure 3 d-e from Magno et al., 2025 located in this repository under "ratevsarea_k5eneg16.fig" and "ratevsarea_k5eneg15.fig"
+
 ## 2D Hydromechanical Model (Julia):
 ### HydroMech2D_Main.jl:
 Main code to run HM model
@@ -45,5 +47,12 @@ Estimate fluid volume transport rates for 476 Pockmarks on Chatham Rise, New Zea
   - Scale simulated fluid volume transport rates by the size distribution of 476 pockmarks and sum quantities to get the total fluid volume transport rate [km^3/yr] from the         
     simultaneous eruption of fluid from the 476 pockmarks
   - Assume fluid is 100% CO2 and is in either liquid or gaseous phase to get mass transport rate estimates of CO2 [PgCO2/yr]
+
+### vis_map.m
+Code required to reproduce Fig 2 from Magno et al., 2025.
+Inputs: Simulation data (vertical flux data qDy)
+Outputs: Heatmaps of vertical flux data
+Required using "crameri.m" to use the "batlowW" colorscheme.
+Crameri, Fabio. (2021). Scientific colour maps (7.0.1). Zenodo. https://doi.org/10.5281/zenodo.5501399
 
 ### DOI: https://zenodo.org/doi/10.5281/zenodo.13328488
